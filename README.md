@@ -5,7 +5,7 @@
 ```
 1. VLC Library for Android 를 사용해 RTSP Streaming 을 하며,
 
-2. 지도 API 를 통해 현재 위치를 보여주고 현재 위치를 MQTT 로 Host PC 에 전송한다.
+2. Naver Map API 를 통해 현재 위치를 보여주고 현재 위치를 MQTT 로 Host PC 에 전송한다.
 ```
 ### 만든 이유
 ```
@@ -44,6 +44,17 @@ find the string "libvlcVersion" below link to get the latest version.
 https://github.com/videolan/vlc-android/blob/master/build.gradle#L33
 ```
 
+### Naver Map API 삽입 관련 
+```
+https://navermaps.github.io/android-map-sdk/guide-ko/
+
+네이버 공식 개발자 문서인 위 링크만 보고 따라가도 완전히 잘 돌아가지만, 개인적으로는 몇 시간 헤맸다.
+
+가장 중요한 개념은 아래 코드를 통해 네이버 지도 객체를 생성하고,
+mapFragment.getMapAsync(this);
+생성이되면, 콜백함수인 아래 함수가 동작을 해서 이 함수안에 지도에서 쓸 기능을 모두 넣으면 된다는 것이다.
+public void onMapReady(@NonNull NaverMap naverMap)
+```
 ## 추후 개발
 
 1. 지도 기능 및 현재 위치 전송 기능 개발
