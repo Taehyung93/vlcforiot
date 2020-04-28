@@ -4,7 +4,7 @@ android {
     compileSdkVersion 29
     buildToolsVersion "29.0.3"
     defaultConfig {
-        applicationId "com.example.vlcforiot"
+        applicationId "com.powervoice.vlcforiot"
         minSdkVersion 23
         targetSdkVersion 29
         versionCode 1
@@ -27,4 +27,9 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
     implementation 'org.videolan.android:libvlc-all:3.3.0-eap08'
+    implementation ('com.naver.maps:map-sdk:3.8.0'){
+        exclude group: 'com.android.support'
+    }
+    implementation 'com.google.android.gms:play-services-location:17.0.0'
 }
+
