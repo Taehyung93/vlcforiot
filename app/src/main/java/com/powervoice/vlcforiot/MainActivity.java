@@ -26,6 +26,16 @@ import com.naver.maps.map.overlay.Marker;
 import com.naver.maps.map.util.FusedLocationSource;
 import com.naver.maps.map.widget.LocationButtonView;
 
+import org.eclipse.paho.android.service.MqttAndroidClient;
+import org.eclipse.paho.client.mqttv3.DisconnectedBufferOptions;
+import org.eclipse.paho.client.mqttv3.IMqttActionListener;
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.IMqttToken;
+import org.eclipse.paho.client.mqttv3.MqttCallback;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.videolan.libvlc.LibVLC;
 import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
@@ -36,7 +46,7 @@ import java.util.ArrayList;
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback {
 
     private VideoView videoView;
-    private Button btnPlay;
+    private Button btnPlay, btnTransfer, btnChange;
     private EditText editxtRtsp;
 
     private LibVLC mLibVLC = null;
@@ -45,8 +55,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1000;
     private FusedLocationSource locationSource;
+    private MqttAndroidClient mqttAndroidClient;
     private NaverMap naverMap;
     private UiSettings uiSettings;
+    private String ReaLocation;
+
+    private int i = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,6 +83,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         videoView = findViewById(R.id.playerView);
         btnPlay = findViewById(R.id.btnPlay);
+        btnChange = findViewById(R.id.btn_map_change);
+        btnTransfer = findViewById(R.id.btn_transfer);
         editxtRtsp = findViewById(R.id.editxtRtsp);
 
         btnPlay.setOnClickListener(new View.OnClickListener() {
@@ -86,18 +102,107 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         });
 
+        btnTransfer.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //Toast.makeText(v.getContext(), naverMap.getLocationSource().toString(), Toast.LENGTH_SHORT).show();
+                naverMap.addOnLocationChangeListener(location ->
+                        //Toast.makeText(v.getContext(), location.getLatitude() + ", " + location.getLongitude(), Toast.LENGTH_SHORT).show()
+                        ReaLocation = location.getLatitude() + ", " + location.getLongitude()
+                );
+                try{
+                    mqttAndroidClient.publish("test",ReaLocation.getBytes(),0, false);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        btnChange.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (i == 0){
+                    naverMap.setMapType(NaverMap.MapType.Satellite);
+                    i = 1;
+                }
+                else {
+                    naverMap.setMapType(NaverMap.MapType.Basic);
+                    i = 0;
+                }
+            }
+        });
+
+        mqttAndroidClient = new MqttAndroidClient(this,  "tcp://" + "192.168.20.184" + ":1883", MqttClient.generateClientId());
+        connect();
+
+//        naverMap.addOnLocationChangeListener(location
+////                Toast.makeText(this, location.getLatitude() + ", " + location.getLongitude(), Toast.LENGTH_SHORT).show()
+////        );
 
     }
 
-//    public void checkPermission() {
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-//        {
-//            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-//                requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
-//
-//            }
-//        }
-//    }
+
+
+    private void connect() {
+        try {
+            IMqttToken token = mqttAndroidClient.connect(getMqttConnectionOption());    //mqtttoken 이라는것을 만들어 connect option을 달아줌
+            token.setActionCallback(new IMqttActionListener() {
+                @Override
+                public void onSuccess(IMqttToken asyncActionToken) {
+                    mqttAndroidClient.setBufferOpts(getDisconnectedBufferOptions());    //연결에 성공한경우
+                    Log.e("Connect_success", "Success");
+                    try {
+                        mqttAndroidClient.subscribe("test", 0 );
+                    } catch (MqttException e) {
+                        e.printStackTrace();
+                    }
+                }
+                @Override
+                public void onFailure(IMqttToken asyncActionToken, Throwable exception) {   //연결에 실패한경우
+                    Log.e("connect_fail", "Failure " + exception.toString());
+                }
+            });
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void callBack() {
+        //클라이언트의 콜백을 처리하는부분
+        mqttAndroidClient.setCallback(new MqttCallback() {
+            @Override
+            public void connectionLost(Throwable cause) {
+            }
+            @Override
+            public void messageArrived(String topic, MqttMessage message) throws Exception {    //모든 메시지가 올때 Callback method
+                if (topic.equals("test")){     //topic 별로 분기처리하여 작업을 수행할수도있음
+                    String msg = new String(message.getPayload());
+                    Log.e("arrive message : ", msg);
+                }
+            }
+            @Override
+            public void deliveryComplete(IMqttDeliveryToken token) {
+            }
+        });
+
+    }
+
+    private DisconnectedBufferOptions getDisconnectedBufferOptions() {
+        DisconnectedBufferOptions disconnectedBufferOptions = new DisconnectedBufferOptions();
+        disconnectedBufferOptions.setBufferEnabled(true);
+        disconnectedBufferOptions.setBufferSize(100);
+        disconnectedBufferOptions.setPersistBuffer(true);
+        disconnectedBufferOptions.setDeleteOldestMessages(false);
+        return disconnectedBufferOptions;
+    }
+
+    private MqttConnectOptions getMqttConnectionOption() {
+        MqttConnectOptions mqttConnectOptions = new MqttConnectOptions();
+        mqttConnectOptions.setCleanSession(false);
+        mqttConnectOptions.setAutomaticReconnect(true);
+        mqttConnectOptions.setWill("aaa", "I am going offline".getBytes(), 1, true);
+        return mqttConnectOptions;
+    }
 
 
     @Override
